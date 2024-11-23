@@ -1,0 +1,76 @@
+import datetime
+import re
+import csv
+
+
+# [19/11/24, 12:43:40 p. m.]
+
+# compilamos todas las regex
+fecha_regex = re.compile(r"\[(\d*\/\d*\/24),(.*)\] (.*): (.*)")
+saludo_regex = [
+    re.compile(r"^(car|hol).*"),
+]
+
+# se fija si el mensaje corresponde a un saludo
+def is_greeting(msg):
+    for regex in saludo_regex:
+        if regex.match(msg.lower()):
+            return True
+    return False
+
+# dandole el archivo (leido hasta cierto punto) y el tiempo del mensaje recibido, devuelve respuesta
+def get_answer_time(file, greet_time):
+    for line in f:
+        msg = fecha_regex.match(line)
+        if msg:
+            if msg.group(3) == "carolina":
+                hora = msg.group(2)
+                hora = hora.replace("\u202fa.\xa0m.", " AM")
+                hora = hora.replace("\u202fp.\xa0m.", " PM")
+                timedata = datetime.datetime.strptime(hora, ' %I:%M:%S %p')
+                return timedata - greet_time
+
+
+
+datos = []  # dia de semana, hora, remitente, mensaje
+
+with open('_chat.txt', encoding="utf-8") as f:
+    for line in f:
+        if fecha_regex.match(line):  # filtramos fecha (solo 2024)
+            msg = fecha_regex.match(line)  # hacemos el match para sacar los grupos luego
+            if is_greeting(msg.group(4)):  # si es un saludo (ejecuta la funcion de arriba)
+
+                # convertimos fecha a dia de la semana
+                fecha = msg.group(1)
+                day, month, year = (int(x) for x in fecha.split('/'))
+                fecha = datetime.date(year, month, day)
+                dia_semana = fecha.strftime("%A")
+
+                # convertimos hora de AM PM a 24Hs
+                hora = msg.group(2)
+                hora = hora.replace("\u202fa.\xa0m.", " AM")
+                hora = hora.replace("\u202fp.\xa0m.", " PM")
+                timedata = datetime.datetime.strptime(hora, ' %I:%M:%S %p')
+
+                # generamos lo que seria nuestra base de datos inicial
+                mensaje = {
+                    "dia": dia_semana,
+                    "fecha": str(fecha),
+                    "hora": timedata.strftime("%H:%M:%S"),
+                    "remitente": msg.group(3),
+                    "mensaje": msg.group(4),
+                }
+                if mensaje["remitente"] != "carolina":  # si yo no soy el remitente:
+                    mensaje["tiempo_respuesta"] = str(get_answer_time(f, timedata))  # agrego tiempo de respuesta a la base (ejecuta funcion de arriba)
+
+
+                    datos.append(mensaje)  # agrego los datos a la base
+
+# genero las columnas
+keys = datos[0].keys()
+
+# armo el csv
+with open(f'datos_{datos[0]["remitente"]}.csv', 'w', newline='') as output_file:
+    dict_writer = csv.DictWriter(output_file, keys)
+    dict_writer.writeheader()
+    dict_writer.writerows(datos)
